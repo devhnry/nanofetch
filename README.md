@@ -7,7 +7,7 @@
 
 ## Why nanofetch?
 
--  **Tiny** - Less than 5KB minified
+-  **Lightweight** - ~5KB package size, zero dependencies
 -  **Zero dependencies** - No supply chain vulnerabilities
 -  **Axios-compatible API** - Easy migration from Axios
 -  **TypeScript first** - Full type safety and autocomplete
