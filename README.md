@@ -1,0 +1,220 @@
+# nanofetch
+
+> Nano-sized, type-safe HTTP client. Axios-like API, zero dependencies, powered by native fetch.
+
+[![npm version](https://img.shields.io/npm/v/nanofetch.svg)](https://www.npmjs.com/package/nanofetch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+## Why nanofetch?
+
+-  **Tiny** - Less than 5KB minified
+-  **Zero dependencies** - No supply chain vulnerabilities
+-  **Axios-compatible API** - Easy migration from Axios
+-  **TypeScript first** - Full type safety and autocomplete
+-  **Universal** - Works in browsers, Node.js, and React Native
+-  **Modern** - Built on native fetch API
+
+## Installation
+```bash
+npm install nanofetch
+```
+
+## Quick Start
+```typescript
+import { api } from 'nanofetch';
+
+// GET request
+const response = await api.get('https://api.example.com/users');
+console.log(response.data);
+
+// POST request
+await api.post('https://api.example.com/users', {
+  name: 'John Doe',
+  email: 'john@example.com'
+});
+```
+
+## Usage
+
+### Basic Requests
+```typescript
+import { api } from 'nanofetch';
+
+// GET
+const users = await api.get('/users');
+
+// POST
+const newUser = await api.post('/users', { name: 'Jane' });
+
+// PUT
+const updated = await api.put('/users/1', { name: 'Jane Doe' });
+
+// PATCH
+const patched = await api.patch('/users/1', { email: 'jane@new.com' });
+
+// DELETE
+await api.delete('/users/1');
+```
+
+### Query Parameters
+```typescript
+const response = await api.get('/users', {
+  params: {
+    page: 1,
+    limit: 10,
+    sort: 'name'
+  }
+});
+// Requests: /users?page=1&limit=10&sort=name
+```
+
+### Custom Headers
+```typescript
+const response = await api.get('/protected', {
+  headers: {
+    'Authorization': 'Bearer your-token-here',
+    'X-Custom-Header': 'value'
+  }
+});
+```
+
+### Request Timeout
+```typescript
+const response = await api.get('/slow-endpoint', {
+  timeout: 5000 // 5 seconds
+});
+```
+
+### Creating Custom Instances
+```typescript
+import { createApiClient } from 'nanofetch';
+
+const api = createApiClient({
+  baseURL: 'https://api.example.com',
+  headers: {
+    'Authorization': 'Bearer token',
+    'Content-Type': 'application/json'
+  },
+  timeout: 10000
+});
+
+// Now all requests use the baseURL
+await api.get('/users'); // -> https://api.example.com/users
+await api.post('/posts', data); // -> https://api.example.com/posts
+```
+
+### TypeScript Support
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// Response is fully typed
+const response = await api.get<User[]>('/users');
+response.data.forEach(user => {
+  console.log(user.name); // Full autocomplete!
+});
+```
+
+### Error Handling
+```typescript
+import { api, ApiError } from 'nanofetch';
+
+try {
+  const response = await api.get('/users');
+} catch (error) {
+  if (error instanceof ApiError) {
+    console.log('Status:', error.status);
+    console.log('Response:', error.response?.data);
+    
+    if (error.isNetworkError) {
+      console.log('Network error - check your connection');
+    }
+    
+    if (error.isTimeout) {
+      console.log('Request timed out');
+    }
+  }
+}
+```
+
+## API Reference
+
+### Request Config
+```typescript
+interface ApiRequestConfig {
+  baseURL?: string;           // Base URL for requests
+  params?: Record<string, any>; // Query parameters
+  headers?: Record<string, string>; // Custom headers
+  timeout?: number;           // Request timeout in milliseconds
+  signal?: AbortSignal;       // For manual cancellation
+  responseType?: 'json' | 'text' | 'blob'; // Response type
+}
+```
+
+### Response Object
+```typescript
+interface ApiResponse<T> {
+  data: T;                    // Response data
+  status: number;             // HTTP status code
+  statusText: string;         // HTTP status text
+  headers: Headers;           // Response headers
+  config: ApiRequestConfig;   // Request config used
+}
+```
+
+### Error Object
+```typescript
+class ApiError extends Error {
+  status?: number;            // HTTP status code
+  response?: ApiResponse;     // Full response object
+  config?: ApiRequestConfig;  // Request config used
+  isNetworkError: boolean;    // True if network failure
+  isTimeout: boolean;         // True if request timed out
+}
+```
+
+## Migrating from Axios
+
+nanofetch uses the same API as Axios for common operations:
+```typescript
+// Axios
+import axios from 'axios';
+const response = await axios.get('/users', { params: { page: 1 } });
+
+// nanofetch - identical!
+import { api } from 'nanofetch';
+const response = await api.get('/users', { params: { page: 1 } });
+```
+
+### Key Differences
+
+- **No interceptors yet** - Coming in v0.2.0
+- **No request cancellation tokens** - Use native `AbortController` instead
+- **No automatic retries** - Coming in v0.3.0
+
+## Roadmap
+
+- [x] Core HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- [x] Query parameters
+- [x] Custom headers
+- [x] Timeout support
+- [x] TypeScript support
+- [ ] Request/response interceptors
+- [ ] Retry logic with exponential backoff
+- [ ] Progress events for uploads/downloads
+- [ ] Request deduplication
+
+## License
+
+MIT © [Henry Taiwo](https://github.com/devhnry)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Author
+
+Built by [Henry Taiwo](https://github.com/devhnry) - Full-stack engineer building tools for developers.

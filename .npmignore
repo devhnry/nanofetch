@@ -1,0 +1,28 @@
+src/
+tsconfig.json
+tsup.config.ts
+
+# Tests
+test-local.js
+*.test.ts
+*.spec.ts
+
+# Config files
+.gitignore
+.eslintrc.*
+.prettierrc.*
+
+# CI/CD
+.github/
+
+# Development
+node_modules/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

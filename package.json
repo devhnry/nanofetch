@@ -1,0 +1,53 @@
+{
+  "name": "nanofetch",
+  "version": "0.1.0",
+  "description": "Nano-sized, type-safe HTTP client. Axios-like API, zero dependencies, powered by native fetch.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "fetch",
+    "http",
+    "axios",
+    "request",
+    "api",
+    "client",
+    "typescript",
+    "zero-dependencies",
+    "lightweight"
+  ],
+  "author": "Henry Taiwo devthenry@gmail.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devhnry/nanofetch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/devhnry/nanofetch/issues"
+  },
+  "homepage": "https://github.com/devhnry/nanofetch#readme",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

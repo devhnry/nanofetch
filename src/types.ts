@@ -1,0 +1,39 @@
+/**
+ * Configuration for a single API request
+ */
+export interface ApiRequestConfig {
+  baseURL?: string;
+  params?: Record<string, any>;
+  headers?: Record<string, string>;
+  timeout?: number;
+  signal?: AbortSignal;
+  responseType?: "json" | "text" | "blob";
+}
+
+/**
+ * API response structure
+ */
+export interface ApiResponse<T = any> {
+  data: T;
+  status: number;
+  statusText: string;
+  headers: Headers;
+  config: ApiRequestConfig;
+}
+
+/**
+ * Custom error class for API errors
+ */
+export class ApiError extends Error {
+  status?: number;
+  response?: ApiResponse<any>;
+  config?: ApiRequestConfig;
+  isNetworkError: boolean = false;
+  isTimeout: boolean = false;
+
+  constructor(message: string, config?: ApiRequestConfig) {
+    super(message);
+    this.name = "ApiError";
+    this.config = config;
+  }
+}
