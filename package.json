@@ -36,7 +36,7 @@
   "author": "Henry Taiwo devthenry@gmail.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/devhnry/nanofetch.git"
+    "url": "git+https://github.com/devhnry/nanofetch.git"
   },
   "bugs": {
     "url": "https://github.com/devhnry/nanofetch/issues"
