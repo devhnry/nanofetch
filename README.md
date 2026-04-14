@@ -178,6 +178,30 @@ api.interceptors.response.use(
 
 **Multiple interceptors** run in the order they were added. Each one receives the output of the previous one, so changes accumulate through the chain.
 
+### Retry with Exponential Backoff
+
+Automatically retry failed requests with increasing delays between attempts:
+
+```typescript
+const api = createApiClient({
+  baseURL: 'https://api.example.com',
+  retry: {
+    attempts: 3,                    // max retries (not counting first attempt)
+    baseDelay: 1000,                // 1s base — doubles each retry + jitter
+    statusCodes: [429, 503, 408],   // which status codes to retry on
+  }
+});
+
+// If the server returns 503, nanofetch retries up to 3 times:
+// attempt 1 → fail → wait ~1s
+// attempt 2 → fail → wait ~2s
+// attempt 3 → fail → wait ~4s
+// attempt 4 → fail → throw ApiError
+const response = await api.get('/users');
+```
+
+Retries only apply to transient errors — `404`, `401`, and parse errors are thrown immediately without retrying. Timeouts also do not retry. Delays are capped at 30 seconds.
+
 ## API Reference
 
 ### Request Config
@@ -230,7 +254,6 @@ const response = await api.get('/users', { params: { page: 1 } });
 ### Key Differences
 
 - **No request cancellation tokens** - Use native `AbortController` instead
-- **No automatic retries** - Coming in v0.2.0
 
 ## Roadmap
 
@@ -240,7 +263,7 @@ const response = await api.get('/users', { params: { page: 1 } });
 - [x] Timeout support
 - [x] TypeScript support
 - [x] Request/response interceptors
-- [ ] Retry logic with exponential backoff
+- [x] Retry logic with exponential backoff
 - [ ] Progress events for uploads/downloads
 - [ ] Request deduplication
 
