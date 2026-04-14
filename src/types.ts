@@ -22,6 +22,14 @@ export interface ApiResponse<T = any> {
 }
 
 /**
+ * A single interceptor handler pair
+ */
+export interface InterceptorHandler<T> {
+  fulfilled: (value: T) => T | Promise<T>;
+  rejected?: (error: any) => any;
+}
+
+/**
  * Custom error class for API errors
  */
 export class ApiError extends Error {
