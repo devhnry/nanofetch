@@ -140,6 +140,44 @@ try {
 }
 ```
 
+### Interceptors
+
+Interceptors let you hook into requests before they are sent, and responses before they are returned to your code.
+
+**Request interceptor** — runs before every fetch (e.g. inject auth headers):
+```typescript
+import { createApiClient } from 'nanofetch';
+
+const api = createApiClient({ baseURL: 'https://api.example.com' });
+
+const id = api.interceptors.request.use((config) => {
+  config.headers = {
+    ...config.headers,
+    'Authorization': `Bearer ${getToken()}`,
+  };
+  return config;
+});
+
+// Remove it later (e.g. on component unmount)
+api.interceptors.request.eject(id);
+```
+
+**Response interceptor** — runs after every response (e.g. token refresh on 401):
+```typescript
+api.interceptors.response.use(
+  (response) => response, // success path — return response as-is or transform it
+  async (error) => {      // error path — handle or re-throw
+    if (error.status === 401) {
+      await refreshToken();
+      return api.get(error.config.url); // retry the original request
+    }
+    throw error;
+  }
+);
+```
+
+**Multiple interceptors** run in the order they were added. Each one receives the output of the previous one, so changes accumulate through the chain.
+
 ## API Reference
 
 ### Request Config
@@ -191,9 +229,8 @@ const response = await api.get('/users', { params: { page: 1 } });
 
 ### Key Differences
 
-- **No interceptors yet** - Coming in v0.2.0
 - **No request cancellation tokens** - Use native `AbortController` instead
-- **No automatic retries** - Coming in v0.3.0
+- **No automatic retries** - Coming in v0.2.0
 
 ## Roadmap
 
@@ -202,7 +239,7 @@ const response = await api.get('/users', { params: { page: 1 } });
 - [x] Custom headers
 - [x] Timeout support
 - [x] TypeScript support
-- [ ] Request/response interceptors
+- [x] Request/response interceptors
 - [ ] Retry logic with exponential backoff
 - [ ] Progress events for uploads/downloads
 - [ ] Request deduplication
