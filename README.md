@@ -208,11 +208,16 @@ Retries only apply to transient errors — `404`, `401`, and parse errors are th
 ```typescript
 interface ApiRequestConfig {
   baseURL?: string;           // Base URL for requests
-  params?: Record<string, any>; // Query parameters
+  params?: Record<string, any>; // Query parameters (arrays supported)
   headers?: Record<string, string>; // Custom headers
   timeout?: number;           // Request timeout in milliseconds
   signal?: AbortSignal;       // For manual cancellation
   responseType?: 'json' | 'text' | 'blob'; // Response type
+  retry?: {
+    attempts?: number;        // Max retries, default 0
+    baseDelay?: number;       // Base delay in ms, default 1000
+    statusCodes?: number[];   // Status codes to retry, default [429, 503, 408]
+  };
 }
 ```
 
@@ -235,6 +240,7 @@ class ApiError extends Error {
   config?: ApiRequestConfig;  // Request config used
   isNetworkError: boolean;    // True if network failure
   isTimeout: boolean;         // True if request timed out
+  isParseError: boolean;      // True if response JSON was malformed
 }
 ```
 
