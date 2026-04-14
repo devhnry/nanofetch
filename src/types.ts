@@ -30,6 +30,7 @@ export class ApiError extends Error {
   config?: ApiRequestConfig;
   isNetworkError: boolean = false;
   isTimeout: boolean = false;
+  isParseError: boolean = false;
 
   constructor(message: string, config?: ApiRequestConfig) {
     super(message);

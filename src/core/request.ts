@@ -19,7 +19,10 @@ function buildURL(
   if (params && Object.keys(params).length > 0) {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
+      if (value === undefined || value === null) return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => searchParams.append(key, String(item)));
+      } else {
         searchParams.append(key, String(value));
       }
     });
@@ -75,7 +78,15 @@ export async function request<T = any>(
     },
   };
 
-  // Build full URL
+  // Build full URL — guard against bare relative URLs in Node.js
+  if (!mergedConfig.baseURL && !url.startsWith("http://") && !url.startsWith("https://")) {
+    const error = new ApiError(
+      `Invalid URL: "${url}" is a relative path but no baseURL is configured`,
+      mergedConfig,
+    );
+    error.isNetworkError = true;
+    throw error;
+  }
   const fullURL = mergedConfig.baseURL
     ? buildURL(mergedConfig.baseURL, url, mergedConfig.params)
     : url;
@@ -96,7 +107,15 @@ export async function request<T = any>(
       // Remove Content-Type for FormData (browser sets it with boundary)
       headers.delete("Content-Type");
     } else {
-      body = JSON.stringify(data);
+      try {
+        body = JSON.stringify(data);
+      } catch (err: any) {
+        const error = new ApiError(
+          `Failed to serialize request body: ${err.message}`,
+          mergedConfig,
+        );
+        throw error;
+      }
     }
   }
 
@@ -106,13 +125,25 @@ export async function request<T = any>(
     ? setTimeout(() => controller.abort(), mergedConfig.timeout)
     : null;
 
+  // When the caller provides their own signal, wire it to the internal
+  // controller so aborting either one cancels the request. The internal
+  // controller's signal is always passed to fetch — it covers both cases.
+  if (mergedConfig.signal?.aborted) {
+    controller.abort(mergedConfig.signal.reason);
+  } else if (mergedConfig.signal) {
+    mergedConfig.signal.addEventListener("abort", () => {
+      controller.abort(mergedConfig.signal!.reason);
+    });
+  }
+  const effectiveSignal = controller.signal;
+
   try {
     // Execute fetch
     const response = await fetch(fullURL, {
       method,
       headers,
       body,
-      signal: mergedConfig.signal || controller.signal,
+      signal: effectiveSignal,
     });
 
     // Clear timeout
@@ -124,7 +155,17 @@ export async function request<T = any>(
 
     if (responseType === "json") {
       const text = await response.text();
-      responseData = text ? JSON.parse(text) : null;
+      try {
+        responseData = text ? JSON.parse(text) : null;
+      } catch (err: any) {
+        const parseError = new ApiError(
+          `Failed to parse response as JSON: ${err.message}`,
+          mergedConfig,
+        );
+        parseError.isParseError = true;
+        parseError.status = response.status;
+        throw parseError;
+      }
     } else if (responseType === "text") {
       responseData = await response.text();
     } else if (responseType === "blob") {
