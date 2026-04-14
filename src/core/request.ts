@@ -119,100 +119,114 @@ export async function request<T = any>(
     }
   }
 
-  // Setup timeout with AbortController
-  const controller = new AbortController();
-  const timeoutId = mergedConfig.timeout
-    ? setTimeout(() => controller.abort(), mergedConfig.timeout)
-    : null;
+  const retryAttempts = mergedConfig.retry?.attempts ?? 0;
+  const retryBaseDelay = mergedConfig.retry?.baseDelay ?? 1000;
+  const retryStatusCodes = mergedConfig.retry?.statusCodes ?? [429, 503, 408];
 
-  // When the caller provides their own signal, wire it to the internal
-  // controller so aborting either one cancels the request. The internal
-  // controller's signal is always passed to fetch — it covers both cases.
-  if (mergedConfig.signal?.aborted) {
-    controller.abort(mergedConfig.signal.reason);
-  } else if (mergedConfig.signal) {
-    mergedConfig.signal.addEventListener("abort", () => {
-      controller.abort(mergedConfig.signal!.reason);
-    });
-  }
-  const effectiveSignal = controller.signal;
+  let lastError: ApiError | undefined;
 
-  try {
-    // Execute fetch
-    const response = await fetch(fullURL, {
-      method,
-      headers,
-      body,
-      signal: effectiveSignal,
-    });
+  for (let attempt = 0; attempt <= retryAttempts; attempt++) {
 
-    // Clear timeout
-    if (timeoutId) clearTimeout(timeoutId);
+    // Fresh controller per attempt — a used/aborted signal can't be reused
+    const controller = new AbortController();
+    const timeoutId = mergedConfig.timeout
+      ? setTimeout(() => controller.abort(), mergedConfig.timeout)
+      : null;
 
-    // Parse response based on responseType
-    let responseData: any;
-    const responseType = mergedConfig.responseType || "json";
+    if (mergedConfig.signal?.aborted) {
+      controller.abort(mergedConfig.signal.reason);
+    } else if (mergedConfig.signal) {
+      mergedConfig.signal.addEventListener("abort", () => {
+        controller.abort(mergedConfig.signal!.reason);
+      });
+    }
 
-    if (responseType === "json") {
-      const text = await response.text();
-      try {
-        responseData = text ? JSON.parse(text) : null;
-      } catch (err: any) {
-        const parseError = new ApiError(
-          `Failed to parse response as JSON: ${err.message}`,
+    try {
+      const response = await fetch(fullURL, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      let responseData: any;
+      const responseType = mergedConfig.responseType || "json";
+
+      if (responseType === "json") {
+        const text = await response.text();
+        try {
+          responseData = text ? JSON.parse(text) : null;
+        } catch (err: any) {
+          const parseError = new ApiError(
+            `Failed to parse response as JSON: ${err.message}`,
+            mergedConfig,
+          );
+          parseError.isParseError = true;
+          parseError.status = response.status;
+          throw parseError;
+        }
+      } else if (responseType === "text") {
+        responseData = await response.text();
+      } else if (responseType === "blob") {
+        responseData = await response.blob();
+      }
+
+      const apiResponse: ApiResponse<T> = {
+        data: responseData,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        config: mergedConfig,
+      };
+
+      if (!response.ok) {
+        const error = new ApiError(
+          `Request failed with status ${response.status}`,
           mergedConfig,
         );
-        parseError.isParseError = true;
-        parseError.status = response.status;
-        throw parseError;
+        error.status = response.status;
+        error.response = apiResponse;
+        throw error;
       }
-    } else if (responseType === "text") {
-      responseData = await response.text();
-    } else if (responseType === "blob") {
-      responseData = await response.blob();
-    }
 
-    // Build response object
-    const apiResponse: ApiResponse<T> = {
-      data: responseData,
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-      config: mergedConfig,
-    };
+      return apiResponse;
+    } catch (err: any) {
+      if (timeoutId) clearTimeout(timeoutId);
 
-    // Throw error for 4xx and 5xx responses
-    if (!response.ok) {
-      const error = new ApiError(
-        `Request failed with status ${response.status}`,
-        mergedConfig,
+      let apiError: ApiError;
+      if (err instanceof ApiError) {
+        apiError = err;
+      } else {
+        apiError = new ApiError(err.message || "Request failed", mergedConfig);
+        if (err.name === "AbortError") {
+          apiError.isTimeout = true;
+          apiError.message = "Request timeout";
+        } else {
+          apiError.isNetworkError = true;
+        }
+      }
+
+      const isRetryable =
+        !apiError.isTimeout &&
+        (apiError.isNetworkError ||
+          (apiError.status !== undefined && retryStatusCodes.includes(apiError.status)));
+
+      lastError = apiError;
+
+      if (!isRetryable || attempt === retryAttempts) {
+        throw apiError;
+      }
+
+      // Exponential backoff with jitter — wait before next attempt
+      const delay = Math.min(
+        retryBaseDelay * 2 ** attempt + Math.random() * 500,
+        30000,
       );
-      error.status = response.status;
-      error.response = apiResponse;
-      throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
-
-    return apiResponse;
-  } catch (err: any) {
-    // Clear timeout on error
-    if (timeoutId) clearTimeout(timeoutId);
-
-    // Handle different error types
-    if (err instanceof ApiError) {
-      throw err; // Re-throw API errors
-    }
-
-    const error = new ApiError(err.message || "Request failed", mergedConfig);
-
-    // Detect timeout
-    if (err.name === "AbortError") {
-      error.isTimeout = true;
-      error.message = "Request timeout";
-    } else {
-      // Network errors (no internet, DNS failure, etc.)
-      error.isNetworkError = true;
-    }
-
-    throw error;
   }
+
+  throw lastError!;
 }

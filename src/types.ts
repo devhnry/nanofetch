@@ -8,6 +8,11 @@ export interface ApiRequestConfig {
   timeout?: number;
   signal?: AbortSignal;
   responseType?: "json" | "text" | "blob";
+  retry?: {
+    attempts?: number;
+    baseDelay?: number;
+    statusCodes?: number[];
+  }
 }
 
 /**
