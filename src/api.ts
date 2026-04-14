@@ -21,38 +21,60 @@ export class ApiClient {
     };
   }
 
-  /**
-   * Run a method through the full interceptor chain.
-   *
-   * TODO(human): Implement the interceptor pipeline here.
-   * This method receives the raw config and a dispatchFn that calls fetch.
-   * It should:
-   *   1. Run all request interceptors on the config (in order)
-   *   2. Call dispatchFn with the (possibly modified) config
-   *   3. Run all response interceptors on the result (in order)
-   * Return the final ApiResponse.
-   */
   private async runWithInterceptors<T>(
     config: ApiRequestConfig,
     dispatchFn: (config: ApiRequestConfig) => Promise<ApiResponse<T>>,
   ): Promise<ApiResponse<T>> {
-    
     const reqHandlers: Array<import("./types").InterceptorHandler<ApiRequestConfig>> = [];
-
     this.interceptors.request.forEach((h) => reqHandlers.push(h));
     for (const handler of reqHandlers) {
-      config = await handler.fulfilled(config);
+      try {
+        config = await handler.fulfilled(config);
+      } catch (err) {
+        if (handler.rejected) {
+          config = await handler.rejected(err);
+        } else {
+          throw err;
+        }
+      }
     }
 
-    let response = await dispatchFn(config);
-
+    let response: ApiResponse<T>;
     const resHandlers: Array<import("./types").InterceptorHandler<ApiResponse<any>>> = [];
     this.interceptors.response.forEach((h) => resHandlers.push(h));
-    for (const handler of resHandlers) {
-      response = await handler.fulfilled(response);
+
+    try {
+      response = await dispatchFn(config);
+    } catch (err) {
+      // Give response interceptors a chance to handle dispatch errors (e.g. token refresh on 401)
+      let handled = false;
+      for (const handler of resHandlers) {
+        if (handler.rejected) {
+          try {
+            response = await handler.rejected(err);
+            handled = true;
+            break;
+          } catch (retryErr) {
+            throw retryErr;
+          }
+        }
+      }
+      if (!handled) throw err;
     }
 
-    return response;
+    for (const handler of resHandlers) {
+      try {
+        response = await handler.fulfilled(response!);
+      } catch (err) {
+        if (handler.rejected) {
+          response = await handler.rejected(err);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return response!;
   }
 
   async get<T = any>(url: string, config?: ApiRequestConfig): Promise<ApiResponse<T>> {

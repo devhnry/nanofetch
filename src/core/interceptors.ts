@@ -23,7 +23,7 @@ export class InterceptorManager<T> {
    * Sets the slot to null so existing IDs stay stable.
    */
   eject(id: number): void {
-    if (this.handlers[id]) {
+    if (this.handlers[id] !== undefined) {
       this.handlers[id] = null;
     }
   }
