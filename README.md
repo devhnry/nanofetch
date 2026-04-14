@@ -2,7 +2,7 @@
 
 > Nano-sized, type-safe HTTP client. Axios-like API, zero dependencies, powered by native fetch.
 
-[![npm version](https://img.shields.io/npm/v/nanofetch.svg)](https://www.npmjs.com/package/nanofetch)
+[![npm version](https://img.shields.io/npm/v/@hnrie/nanofetch.svg)](https://www.npmjs.com/package/@hnrie/nanofetch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ## Why nanofetch?
@@ -16,12 +16,12 @@
 
 ## Installation
 ```bash
-npm install nanofetch
+npm install @hnrie/nanofetch
 ```
 
 ## Quick Start
 ```typescript
-import { api } from 'nanofetch';
+import { api } from '@hnrie/nanofetch';
 
 // GET request
 const response = await api.get('https://api.example.com/users');
@@ -38,7 +38,7 @@ await api.post('https://api.example.com/users', {
 
 ### Basic Requests
 ```typescript
-import { api } from 'nanofetch';
+import { api } from '@hnrie/nanofetch';
 
 // GET
 const users = await api.get('/users');
@@ -87,7 +87,7 @@ const response = await api.get('/slow-endpoint', {
 
 ### Creating Custom Instances
 ```typescript
-import { createApiClient } from 'nanofetch';
+import { createApiClient } from '@hnrie/nanofetch';
 
 const api = createApiClient({
   baseURL: 'https://api.example.com',
@@ -120,7 +120,7 @@ response.data.forEach(user => {
 
 ### Error Handling
 ```typescript
-import { api, ApiError } from 'nanofetch';
+import { api, ApiError } from '@hnrie/nanofetch';
 
 try {
   const response = await api.get('/users');
@@ -146,7 +146,7 @@ Interceptors let you hook into requests before they are sent, and responses befo
 
 **Request interceptor** — runs before every fetch (e.g. inject auth headers):
 ```typescript
-import { createApiClient } from 'nanofetch';
+import { createApiClient } from '@hnrie/nanofetch';
 
 const api = createApiClient({ baseURL: 'https://api.example.com' });
 
@@ -252,8 +252,8 @@ nanofetch uses the same API as Axios for common operations:
 import axios from 'axios';
 const response = await axios.get('/users', { params: { page: 1 } });
 
-// nanofetch - identical!
-import { api } from 'nanofetch';
+// @hnrie/nanofetch - identical!
+import { api } from '@hnrie/nanofetch';
 const response = await api.get('/users', { params: { page: 1 } });
 ```
 
