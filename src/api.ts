@@ -1,6 +1,6 @@
 import { request } from "./core/request";
 import { InterceptorManager } from "./core/interceptors";
-import { ApiRequestConfig, ApiResponse } from "./types";
+import { ApiRequestConfig, ApiResponse, ApiError } from "./types";
 
 /**
  * Main API class with Axios-style methods
@@ -123,6 +123,16 @@ export class ApiClient {
     return this.runWithInterceptors<void>(
       { ...this.defaultConfig, ...config },
       (cfg) => request<void>("OPTIONS", url, undefined, cfg, this.defaultConfig),
+    );
+  }
+
+  async replay<T = any>(error: ApiError): Promise<ApiResponse<T>> {
+    if (!error.method || !error.url) {
+      throw new ApiError("Cannot replay a request without method and url", error.config);
+    }
+    return this.runWithInterceptors<T>(
+      { ...error.config },
+      (cfg) => request<T>(error.method!, error.url!, error.data, cfg, this.defaultConfig),
     );
   }
 }
