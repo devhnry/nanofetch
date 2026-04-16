@@ -1,6 +1,6 @@
 {
   "name": "@hnrie/nanofetch",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Nano-sized, type-safe HTTP client. Axios-like API, zero dependencies, powered by native fetch.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
