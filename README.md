@@ -164,12 +164,22 @@ api.interceptors.request.eject(id);
 
 **Response interceptor** — runs after every response (e.g. token refresh on 401):
 ```typescript
+import { ApiError } from '@hnrie/nanofetch';
+
 api.interceptors.response.use(
   (response) => response, // success path — return response as-is or transform it
   async (error) => {      // error path — handle or re-throw
-    if (error.status === 401) {
-      await refreshToken();
-      return api.get(error.config.url); // retry the original request
+    if (error instanceof ApiError && error.status === 401) {
+      const newToken = await refreshToken();
+
+      // Patch the new token into the original request config
+      error.config!.headers = {
+        ...error.config?.headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+
+      // Transparently replay the original request (any method, with original body)
+      return api.replay(error);
     }
     throw error;
   }
@@ -238,11 +248,26 @@ class ApiError extends Error {
   status?: number;            // HTTP status code
   response?: ApiResponse;     // Full response object
   config?: ApiRequestConfig;  // Request config used
+  method?: string;            // HTTP method of the failed request
+  url?: string;               // URL of the failed request
+  data?: any;                 // Original request body (pre-serialization)
   isNetworkError: boolean;    // True if network failure
   isTimeout: boolean;         // True if request timed out
   isParseError: boolean;      // True if response JSON was malformed
 }
 ```
+
+### `client.replay(error)`
+
+Re-fires the exact request that produced an `ApiError` — same method, URL, body, and config. Designed for use inside response interceptors after token refresh or other recovery logic.
+
+```typescript
+// Patch recovery state onto error.config, then replay
+error.config!.headers = { ...error.config?.headers, Authorization: `Bearer ${newToken}` };
+const response = await client.replay(error);
+```
+
+Throws an `ApiError` if `method` or `url` is missing from the error (e.g. the error did not originate from a nanofetch request).
 
 ## Migrating from Axios
 
@@ -270,6 +295,7 @@ const response = await api.get('/users', { params: { page: 1 } });
 - [x] TypeScript support
 - [x] Request/response interceptors
 - [x] Retry logic with exponential backoff
+- [x] Transparent request replay via `client.replay(error)`
 - [ ] Progress events for uploads/downloads
 - [ ] Request deduplication
 
