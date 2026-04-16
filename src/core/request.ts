@@ -188,6 +188,9 @@ export async function request<T = any>(
         );
         error.status = response.status;
         error.response = apiResponse;
+        error.method = method;
+        error.url = url;
+        error.data = data;
         throw error;
       }
 
@@ -207,6 +210,9 @@ export async function request<T = any>(
           apiError.isNetworkError = true;
         }
       }
+      apiError.method = method;
+      apiError.url = url;
+      apiError.data = data;
 
       const isRetryable =
         !apiError.isTimeout &&

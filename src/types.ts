@@ -44,6 +44,9 @@ export class ApiError extends Error {
   isNetworkError: boolean = false;
   isTimeout: boolean = false;
   isParseError: boolean = false;
+  method?: string;
+  url?: string;
+  data?: any;
 
   constructor(message: string, config?: ApiRequestConfig) {
     super(message);
