@@ -79,49 +79,49 @@ export class ApiClient {
 
   async get<T = any>(url: string, config?: ApiRequestConfig): Promise<ApiResponse<T>> {
     return this.runWithInterceptors<T>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "GET" },
       (cfg) => request<T>("GET", url, undefined, cfg, this.defaultConfig),
     );
   }
 
   async post<T = any>(url: string, data?: any, config?: ApiRequestConfig): Promise<ApiResponse<T>> {
     return this.runWithInterceptors<T>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "POST", data },
       (cfg) => request<T>("POST", url, data, cfg, this.defaultConfig),
     );
   }
 
   async put<T = any>(url: string, data?: any, config?: ApiRequestConfig): Promise<ApiResponse<T>> {
     return this.runWithInterceptors<T>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "PUT", data },
       (cfg) => request<T>("PUT", url, data, cfg, this.defaultConfig),
     );
   }
 
   async patch<T = any>(url: string, data?: any, config?: ApiRequestConfig): Promise<ApiResponse<T>> {
     return this.runWithInterceptors<T>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "PATCH", data },
       (cfg) => request<T>("PATCH", url, data, cfg, this.defaultConfig),
     );
   }
 
   async delete<T = any>(url: string, config?: ApiRequestConfig): Promise<ApiResponse<T>> {
     return this.runWithInterceptors<T>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "DELETE" },
       (cfg) => request<T>("DELETE", url, undefined, cfg, this.defaultConfig),
     );
   }
 
   async head(url: string, config?: ApiRequestConfig): Promise<ApiResponse<void>> {
     return this.runWithInterceptors<void>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "HEAD" },
       (cfg) => request<void>("HEAD", url, undefined, cfg, this.defaultConfig),
     );
   }
 
   async options(url: string, config?: ApiRequestConfig): Promise<ApiResponse<void>> {
     return this.runWithInterceptors<void>(
-      { ...this.defaultConfig, ...config },
+      { ...this.defaultConfig, ...config, url, method: "OPTIONS" },
       (cfg) => request<void>("OPTIONS", url, undefined, cfg, this.defaultConfig),
     );
   }
@@ -131,7 +131,7 @@ export class ApiClient {
       throw new ApiError("Cannot replay a request without method and url", error.config);
     }
     return this.runWithInterceptors<T>(
-      { ...error.config },
+      { ...error.config, url: error.url, method: error.method, data: error.data },
       (cfg) => request<T>(error.method!, error.url!, error.data, cfg, this.defaultConfig),
     );
   }
