@@ -3,6 +3,9 @@
  */
 export interface ApiRequestConfig {
   baseURL?: string;
+  url?: string;
+  method?: string;
+  data?: any;
   params?: Record<string, any>;
   headers?: Record<string, string>;
   timeout?: number;
