@@ -7,10 +7,25 @@ export interface ApiRequestConfig {
   method?: string;
   data?: any;
   params?: Record<string, any>;
+  /**
+   * Optional params serializer. Return a query string without a leading "?".
+   * If omitted, nanofetch uses a small built-in serializer.
+   */
+  paramsSerializer?: (params: unknown) => string;
   headers?: Record<string, string>;
   timeout?: number;
   signal?: AbortSignal;
-  responseType?: "json" | "text" | "blob";
+  responseType?: "json" | "text" | "blob" | "arrayBuffer";
+  /**
+   * Override fetch implementation (useful for tests / custom runtimes).
+   * Defaults to global fetch.
+   */
+  fetch?: typeof fetch;
+  /**
+   * Decide whether an HTTP status should resolve or throw.
+   * Defaults to 200–299.
+   */
+  validateStatus?: (status: number) => boolean;
   retry?: {
     attempts?: number;
     baseDelay?: number;
@@ -27,6 +42,10 @@ export interface ApiResponse<T = any> {
   statusText: string;
   headers: Headers;
   config: ApiRequestConfig;
+  /**
+   * Opaque request info (Axios-like). Shape may vary by environment.
+   */
+  request?: any;
 }
 
 /**
@@ -44,6 +63,9 @@ export class ApiError extends Error {
   status?: number;
   response?: ApiResponse<any>;
   config?: ApiRequestConfig;
+  code?: string;
+  request?: any;
+  cause?: unknown;
   isNetworkError: boolean = false;
   isTimeout: boolean = false;
   isParseError: boolean = false;
@@ -56,4 +78,12 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.config = config;
   }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function isCancel(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "ERR_CANCELED";
 }
