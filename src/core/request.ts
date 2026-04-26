@@ -3,10 +3,63 @@ import { ApiRequestConfig, ApiResponse, ApiError } from "../types";
 /**
  * Build the full URL from baseURL, path, and query params
  */
+function defaultValidateStatus(status: number): boolean {
+  return status >= 200 && status < 300;
+}
+
+function isAbsoluteHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+function defaultParamsSerializer(params: unknown): string {
+  if (!params || typeof params !== "object") return "";
+
+  const pairs: Array<[string, string]> = [];
+
+  const add = (key: string, value: unknown) => {
+    if (value === undefined || value === null) return;
+    pairs.push([key, String(value)]);
+  };
+
+  const build = (prefix: string, value: unknown) => {
+    if (value === undefined || value === null) return;
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          // Axios-ish: nested objects inside arrays get a [] hint.
+          build(`${prefix}[]`, item);
+        } else {
+          add(prefix, item);
+        }
+      }
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      for (const key of Object.keys(obj).sort()) {
+        build(prefix ? `${prefix}[${key}]` : key, obj[key]);
+      }
+      return;
+    }
+
+    add(prefix, value);
+  };
+
+  build("", params);
+
+  // URLSearchParams handles encoding; preserve order already made stable by sorting keys above.
+  const sp = new URLSearchParams();
+  for (const [k, v] of pairs) sp.append(k, v);
+  return sp.toString();
+}
+
 function buildURL(
   baseURL: string,
   path: string,
-  params?: Record<string, any>,
+  params: unknown,
+  paramsSerializer?: (params: unknown) => string,
 ): string {
   // Remove trailing slash from baseURL
   const base = baseURL.replace(/\/$/, "");
@@ -16,17 +69,10 @@ function buildURL(
   let url = `${base}/${cleanPath}`;
 
   // Add query params if they exist
-  if (params && Object.keys(params).length > 0) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      if (Array.isArray(value)) {
-        value.forEach((item) => searchParams.append(key, String(item)));
-      } else {
-        searchParams.append(key, String(value));
-      }
-    });
-    url += `?${searchParams.toString()}`;
+  const serialize = paramsSerializer ?? defaultParamsSerializer;
+  const qs = serialize(params);
+  if (qs) {
+    url += `?${qs}`;
   }
 
   return url;
@@ -79,7 +125,7 @@ export async function request<T = any>(
   };
 
   // Build full URL — guard against bare relative URLs in Node.js
-  if (!mergedConfig.baseURL && !url.startsWith("http://") && !url.startsWith("https://")) {
+  if (!mergedConfig.baseURL && !isAbsoluteHttpUrl(url)) {
     const error = new ApiError(
       `Invalid URL: "${url}" is a relative path but no baseURL is configured`,
       mergedConfig,
@@ -87,9 +133,20 @@ export async function request<T = any>(
     error.isNetworkError = true;
     throw error;
   }
-  const fullURL = mergedConfig.baseURL
-    ? buildURL(mergedConfig.baseURL, url, mergedConfig.params)
-    : url;
+  const fullURL =
+    mergedConfig.baseURL && !isAbsoluteHttpUrl(url)
+      ? buildURL(mergedConfig.baseURL, url, mergedConfig.params, mergedConfig.paramsSerializer)
+      : url;
+
+  const fetchImpl = mergedConfig.fetch ?? fetch;
+  if (typeof fetchImpl !== "function") {
+    const error = new ApiError(
+      `No fetch implementation available. Provide config.fetch or use a runtime with global fetch.`,
+      mergedConfig,
+    );
+    error.isNetworkError = true;
+    throw error;
+  }
 
   // Prepare headers
   const headers = mergeHeaders(defaultConfig.headers, mergedConfig.headers);
@@ -114,6 +171,7 @@ export async function request<T = any>(
           `Failed to serialize request body: ${err.message}`,
           mergedConfig,
         );
+        error.cause = err;
         throw error;
       }
     }
@@ -129,30 +187,40 @@ export async function request<T = any>(
 
     // Fresh controller per attempt — a used/aborted signal can't be reused
     const controller = new AbortController();
-    const timeoutId = mergedConfig.timeout
-      ? setTimeout(() => controller.abort(), mergedConfig.timeout)
-      : null;
+    let abortedByTimeout = false;
+    let localTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let onAbort: (() => void) | null = null;
 
     if (mergedConfig.signal?.aborted) {
       controller.abort(mergedConfig.signal.reason);
     } else if (mergedConfig.signal) {
-      mergedConfig.signal.addEventListener("abort", () => {
-        controller.abort(mergedConfig.signal!.reason);
-      });
+      onAbort = () => controller.abort(mergedConfig.signal!.reason);
+      mergedConfig.signal.addEventListener("abort", onAbort);
     }
 
     try {
-      const response = await fetch(fullURL, {
+      localTimeoutId = mergedConfig.timeout
+        ? setTimeout(() => {
+            abortedByTimeout = true;
+            controller.abort("NANOFETCH_TIMEOUT");
+          }, mergedConfig.timeout)
+        : null;
+
+      const response = await fetchImpl(fullURL, {
         method,
         headers,
         body,
         signal: controller.signal,
       });
 
-      if (timeoutId) clearTimeout(timeoutId);
-
       let responseData: any;
-      const responseType = mergedConfig.responseType || "json";
+      const explicitType = mergedConfig.responseType;
+      const contentType = response.headers.get("content-type") || "";
+      const inferredType =
+        /(^|;)\s*application\/json\s*(;|$)/i.test(contentType) || /\+json\b/i.test(contentType)
+          ? "json"
+          : "text";
+      const responseType = explicitType ?? inferredType;
 
       if (responseType === "json") {
         const text = await response.text();
@@ -165,12 +233,15 @@ export async function request<T = any>(
           );
           parseError.isParseError = true;
           parseError.status = response.status;
+          parseError.cause = err;
           throw parseError;
         }
       } else if (responseType === "text") {
         responseData = await response.text();
       } else if (responseType === "blob") {
         responseData = await response.blob();
+      } else if (responseType === "arrayBuffer") {
+        responseData = await response.arrayBuffer();
       }
 
       const apiResponse: ApiResponse<T> = {
@@ -179,9 +250,11 @@ export async function request<T = any>(
         statusText: response.statusText,
         headers: response.headers,
         config: mergedConfig,
+        request: { url: fullURL, method },
       };
 
-      if (!response.ok) {
+      const validateStatus = mergedConfig.validateStatus ?? defaultValidateStatus;
+      if (!validateStatus(response.status)) {
         const error = new ApiError(
           `Request failed with status ${response.status}`,
           mergedConfig,
@@ -191,21 +264,28 @@ export async function request<T = any>(
         error.method = method;
         error.url = url;
         error.data = data;
+        error.request = apiResponse.request;
         throw error;
       }
 
       return apiResponse;
     } catch (err: any) {
-      if (timeoutId) clearTimeout(timeoutId);
-
       let apiError: ApiError;
       if (err instanceof ApiError) {
         apiError = err;
       } else {
         apiError = new ApiError(err.message || "Request failed", mergedConfig);
+        apiError.cause = err;
         if (err.name === "AbortError") {
-          apiError.isTimeout = true;
-          apiError.message = "Request timeout";
+          if (abortedByTimeout || controller.signal.reason === "NANOFETCH_TIMEOUT") {
+            apiError.isTimeout = true;
+            apiError.code = "ECONNABORTED";
+            apiError.message = mergedConfig.timeout
+              ? `timeout of ${mergedConfig.timeout}ms exceeded`
+              : "Request timeout";
+          } else {
+            apiError.code = "ERR_CANCELED";
+          }
         } else {
           apiError.isNetworkError = true;
         }
@@ -213,9 +293,11 @@ export async function request<T = any>(
       apiError.method = method;
       apiError.url = url;
       apiError.data = data;
+      apiError.request = { url: fullURL, method };
 
       const isRetryable =
         !apiError.isTimeout &&
+        apiError.code !== "ERR_CANCELED" &&
         (apiError.isNetworkError ||
           (apiError.status !== undefined && retryStatusCodes.includes(apiError.status)));
 
@@ -231,6 +313,11 @@ export async function request<T = any>(
         30000,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
+    } finally {
+      if (localTimeoutId) clearTimeout(localTimeoutId);
+      if (onAbort && mergedConfig.signal) {
+        mergedConfig.signal.removeEventListener("abort", onAbort);
+      }
     }
   }
 
