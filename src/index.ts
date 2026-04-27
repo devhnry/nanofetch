@@ -1,6 +1,7 @@
 // Export everything users need
 export { ApiClient, createApiClient } from "./api";
-export { ApiError } from "./types";
+export { createApiClient as create } from "./api";
+export { ApiError, isApiError, isCancel } from "./types";
 export type { ApiRequestConfig, ApiResponse, InterceptorHandler } from "./types";
 
 // Create a default instance for convenience
