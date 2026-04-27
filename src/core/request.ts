@@ -11,6 +11,12 @@ function isAbsoluteHttpUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function defaultParamsSerializer(params: unknown): string {
   if (!params || typeof params !== "object") return "";
 
@@ -18,6 +24,10 @@ function defaultParamsSerializer(params: unknown): string {
 
   const add = (key: string, value: unknown) => {
     if (value === undefined || value === null) return;
+    if (value instanceof Date) {
+      pairs.push([key, value.toISOString()]);
+      return;
+    }
     pairs.push([key, String(value)]);
   };
 
@@ -26,7 +36,7 @@ function defaultParamsSerializer(params: unknown): string {
 
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (item && typeof item === "object" && !Array.isArray(item)) {
+        if (isPlainObject(item)) {
           // Axios-ish: nested objects inside arrays get a [] hint.
           build(`${prefix}[]`, item);
         } else {
@@ -36,10 +46,9 @@ function defaultParamsSerializer(params: unknown): string {
       return;
     }
 
-    if (value && typeof value === "object") {
-      const obj = value as Record<string, unknown>;
-      for (const key of Object.keys(obj).sort()) {
-        build(prefix ? `${prefix}[${key}]` : key, obj[key]);
+    if (isPlainObject(value)) {
+      for (const key of Object.keys(value).sort()) {
+        build(prefix ? `${prefix}[${key}]` : key, value[key]);
       }
       return;
     }
@@ -53,6 +62,15 @@ function defaultParamsSerializer(params: unknown): string {
   const sp = new URLSearchParams();
   for (const [k, v] of pairs) sp.append(k, v);
   return sp.toString();
+}
+
+function appendQueryString(url: string, qs: string): string {
+  if (!qs) return url;
+  const hashIndex = url.indexOf("#");
+  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : "";
+
+  return base.includes("?") ? `${base}&${qs}${hash}` : `${base}?${qs}${hash}`;
 }
 
 function buildURL(
@@ -72,7 +90,7 @@ function buildURL(
   const serialize = paramsSerializer ?? defaultParamsSerializer;
   const qs = serialize(params);
   if (qs) {
-    url += `?${qs}`;
+    url = appendQueryString(url, qs);
   }
 
   return url;
@@ -133,10 +151,11 @@ export async function request<T = any>(
     error.isNetworkError = true;
     throw error;
   }
-  const fullURL =
-    mergedConfig.baseURL && !isAbsoluteHttpUrl(url)
-      ? buildURL(mergedConfig.baseURL, url, mergedConfig.params, mergedConfig.paramsSerializer)
-      : url;
+  const serialize = mergedConfig.paramsSerializer ?? defaultParamsSerializer;
+  const qs = serialize(mergedConfig.params);
+  const fullURL = mergedConfig.baseURL && !isAbsoluteHttpUrl(url)
+    ? buildURL(mergedConfig.baseURL, url, mergedConfig.params, mergedConfig.paramsSerializer)
+    : appendQueryString(url, qs);
 
   const fetchImpl = mergedConfig.fetch ?? fetch;
   if (typeof fetchImpl !== "function") {
