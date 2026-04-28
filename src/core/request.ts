@@ -7,6 +7,8 @@ function defaultValidateStatus(status: number): boolean {
   return status >= 200 && status < 300;
 }
 
+const TIMEOUT_REASON: unique symbol = Symbol("NANOFETCH_TIMEOUT");
+
 function isAbsoluteHttpUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
@@ -47,7 +49,7 @@ function defaultParamsSerializer(params: unknown): string {
     }
 
     if (isPlainObject(value)) {
-      for (const key of Object.keys(value).sort()) {
+      for (const key of Object.keys(value)) {
         build(prefix ? `${prefix}[${key}]` : key, value[key]);
       }
       return;
@@ -58,7 +60,7 @@ function defaultParamsSerializer(params: unknown): string {
 
   build("", params);
 
-  // URLSearchParams handles encoding; preserve order already made stable by sorting keys above.
+  // URLSearchParams handles encoding.
   const sp = new URLSearchParams();
   for (const [k, v] of pairs) sp.append(k, v);
   return sp.toString();
@@ -235,7 +237,7 @@ export async function request<T = any>(
       localTimeoutId = mergedConfig.timeout
         ? setTimeout(() => {
             abortedByTimeout = true;
-            controller.abort("NANOFETCH_TIMEOUT");
+            controller.abort(TIMEOUT_REASON);
           }, mergedConfig.timeout)
         : null;
 
@@ -328,7 +330,7 @@ export async function request<T = any>(
         apiError = new ApiError(err.message || "Request failed", mergedConfig);
         apiError.cause = err;
         if (err.name === "AbortError") {
-          if (abortedByTimeout || controller.signal.reason === "NANOFETCH_TIMEOUT") {
+          if (abortedByTimeout || controller.signal.reason === TIMEOUT_REASON) {
             apiError.isTimeout = true;
             apiError.code = "ECONNABORTED";
             apiError.message = mergedConfig.timeout
