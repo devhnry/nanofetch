@@ -151,13 +151,27 @@ export async function request<T = any>(
     error.isNetworkError = true;
     throw error;
   }
-  const serialize = mergedConfig.paramsSerializer ?? defaultParamsSerializer;
-  const qs = serialize(mergedConfig.params);
-  const fullURL = mergedConfig.baseURL && !isAbsoluteHttpUrl(url)
-    ? buildURL(mergedConfig.baseURL, url, mergedConfig.params, mergedConfig.paramsSerializer)
-    : appendQueryString(url, qs);
+  let fullURL: string;
+  try {
+    if (mergedConfig.baseURL && !isAbsoluteHttpUrl(url)) {
+      fullURL = buildURL(
+        mergedConfig.baseURL,
+        url,
+        mergedConfig.params,
+        mergedConfig.paramsSerializer,
+      );
+    } else {
+      const serialize = mergedConfig.paramsSerializer ?? defaultParamsSerializer;
+      fullURL = appendQueryString(url, serialize(mergedConfig.params));
+    }
+  } catch (cause) {
+    const error = new ApiError(`Failed to build request URL for "${url}"`, mergedConfig);
+    error.cause = cause;
+    throw error;
+  }
 
-  const fetchImpl = mergedConfig.fetch ?? fetch;
+  const globalFetch = (globalThis as any).fetch as typeof fetch | undefined;
+  const fetchImpl = mergedConfig.fetch ?? globalFetch;
   if (typeof fetchImpl !== "function") {
     const error = new ApiError(
       `No fetch implementation available. Provide config.fetch or use a runtime with global fetch.`,
@@ -273,7 +287,25 @@ export async function request<T = any>(
       };
 
       const validateStatus = mergedConfig.validateStatus ?? defaultValidateStatus;
-      if (!validateStatus(response.status)) {
+      let isValidStatus: boolean;
+      try {
+        isValidStatus = validateStatus(response.status);
+      } catch (cause) {
+        const error = new ApiError(
+          `validateStatus threw while evaluating response status ${response.status}`,
+          mergedConfig,
+        );
+        error.status = response.status;
+        error.response = apiResponse;
+        error.method = method;
+        error.url = url;
+        error.data = data;
+        error.request = apiResponse.request;
+        error.cause = cause;
+        throw error;
+      }
+
+      if (!isValidStatus) {
         const error = new ApiError(
           `Request failed with status ${response.status}`,
           mergedConfig,
