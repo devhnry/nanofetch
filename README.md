@@ -219,10 +219,13 @@ Retries only apply to transient errors — `404`, `401`, and parse errors are th
 interface ApiRequestConfig {
   baseURL?: string;           // Base URL for requests
   params?: Record<string, any>; // Query parameters (arrays supported)
+  paramsSerializer?: (params: unknown) => string; // Custom query string serializer
   headers?: Record<string, string>; // Custom headers
   timeout?: number;           // Request timeout in milliseconds
   signal?: AbortSignal;       // For manual cancellation
-  responseType?: 'json' | 'text' | 'blob'; // Response type
+  responseType?: 'json' | 'text' | 'blob' | 'arrayBuffer'; // Response type override
+  fetch?: typeof fetch;       // Inject a custom fetch (tests / custom runtimes)
+  validateStatus?: (status: number) => boolean; // Defaults to 200–299
   retry?: {
     attempts?: number;        // Max retries, default 0
     baseDelay?: number;       // Base delay in ms, default 1000
@@ -239,6 +242,7 @@ interface ApiResponse<T> {
   statusText: string;         // HTTP status text
   headers: Headers;           // Response headers
   config: ApiRequestConfig;   // Request config used
+  request?: any;              // Opaque request info (Axios-like)
 }
 ```
 
@@ -248,12 +252,32 @@ class ApiError extends Error {
   status?: number;            // HTTP status code
   response?: ApiResponse;     // Full response object
   config?: ApiRequestConfig;  // Request config used
+  code?: string;              // Axios-like error code (e.g. ECONNABORTED, ERR_CANCELED)
+  request?: any;              // Opaque request info (Axios-like)
+  cause?: unknown;            // Original error, if available
   method?: string;            // HTTP method of the failed request
   url?: string;               // URL of the failed request
   data?: any;                 // Original request body (pre-serialization)
   isNetworkError: boolean;    // True if network failure
   isTimeout: boolean;         // True if request timed out
   isParseError: boolean;      // True if response JSON was malformed
+}
+```
+
+Helpers:
+
+```typescript
+import { isApiError, isCancel } from '@hnrie/nanofetch';
+
+try {
+  await api.get('/slow', { timeout: 10 });
+} catch (e) {
+  if (isCancel(e)) {
+    // user abort via AbortController
+  }
+  if (isApiError(e) && e.code === 'ECONNABORTED') {
+    // timeout
+  }
 }
 ```
 
@@ -284,7 +308,7 @@ const response = await api.get('/users', { params: { page: 1 } });
 
 ### Key Differences
 
-- **No request cancellation tokens** - Use native `AbortController` instead
+- **No request cancellation tokens** - Use native `AbortController` instead (`ApiError.code === "ERR_CANCELED"` for cancels)
 
 ## Roadmap
 

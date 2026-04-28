@@ -1,6 +1,6 @@
 {
   "name": "@hnrie/nanofetch",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Nano-sized, type-safe HTTP client. Axios-like API, zero dependencies, powered by native fetch.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -45,7 +45,7 @@
   "license": "MIT",
   "devDependencies": {
     "tsup": "^8.5.1",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=16.0.0"
