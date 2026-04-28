@@ -84,6 +84,6 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
-export function isCancel(error: unknown): boolean {
+export function isCancel(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === "ERR_CANCELED";
 }
